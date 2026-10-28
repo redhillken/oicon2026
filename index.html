@@ -189,6 +189,12 @@
     background: rgba(0,0,0,.88); border-left: .6cqw solid; border-right: .6cqw solid;
     animation: capLife 2.8s forwards;
   }
+  /* 藤井・山口が出てくる警告テロップは画面中央に大きく */
+  #capsC {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 16;
+    display: flex; flex-direction: column; align-items: center; pointer-events: none;
+  }
+  #capsC .cap { font-size: 4.6cqw; padding: .9cqw 3.2cqw; border-left-width: .9cqw; border-right-width: .9cqw; }
   @keyframes capLife {
     0%   { opacity: 0; transform: translateY(1.5cqh) scale(1.08); }
     8%   { opacity: 1; transform: none; }
@@ -209,7 +215,7 @@
     <input id="pw" type="text" autocomplete="off" spellcheck="false" autofocus>
     <div id="msg"></div>
     <div class="sub" style="font-size:.9cqw;opacity:.35">[ENTER] で認証</div>
-    <div style="position:absolute;right:1.5cqw;bottom:1.5cqh;font-size:.8cqw;opacity:.3">ver 10/28-20:40 16:9</div>
+    <div style="position:absolute;right:1.5cqw;bottom:1.5cqh;font-size:.8cqw;opacity:.3">ver 10/28-20:45 16:9</div>
   </div>
 
   <div id="hack">
@@ -236,6 +242,7 @@
       <div id="apct">0%</div>
     </div>
     <div id="caps"></div>
+    <div id="capsC"></div>
     <div id="phase"><div class="n" id="phaseN"></div><div class="t" id="phaseT"></div></div>
     <div id="bar"><div id="fill"></div><div id="pct">0%</div></div>
     <div id="granted">
@@ -603,7 +610,8 @@ function startHack() {
   function showCap(text, color) {
     const d = document.createElement("div"); d.className = "cap"; d.textContent = text;
     d.style.color = color; d.style.borderColor = color; d.style.boxShadow = `0 0 25px ${color}`;
-    $("caps").appendChild(d); setTimeout(() => d.remove(), 2800); sfx.cap(color);
+    const box = /藤井|山口/.test(text) ? "capsC" : "caps";   // 藤井・山口の警告は中央に大きく
+    $(box).appendChild(d); setTimeout(() => d.remove(), 2800); sfx.cap(color);
   }
   let lastTick = 0;
   sfx.hackStart();
