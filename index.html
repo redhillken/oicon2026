@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>SYSTEM ACCESS</title>
+<title>BEPPAN TERMINAL</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -119,8 +119,8 @@
 <div id="screen">
 
   <div id="login">
-    <div class="title">SECURE TERMINAL v4.7.2</div>
-    <div class="sub">ENTER ACCESS CODE</div>
+    <div class="title">BEPPAN SECURE TERMINAL</div>
+    <div class="sub">別班専用回線 ― 接触コードを入力せよ</div>
     <input id="pw" type="text" autocomplete="off" spellcheck="false" autofocus>
     <div id="msg"></div>
     <div class="sub" style="font-size:.9vw;opacity:.35">[ENTER] で認証</div>
@@ -130,18 +130,18 @@
     <canvas id="rain"></canvas>
     <div id="log"></div>
     <div id="side">
-      <div style="font-size:1.3vw;margin-bottom:.8vw">■ TARGET : TOKYO-NODE</div>
-      <div class="row"><span>IP</span><span id="ip">---</span></div>
-      <div class="row"><span>PORT</span><span id="port">---</span></div>
-      <div class="row"><span>FIREWALL</span><span id="fw">ACTIVE</span></div>
-      <div class="row"><span>ENCRYPTION</span><span id="enc">AES-256</span></div>
-      <div class="row"><span>STATUS</span><span id="st">CONNECTING</span></div>
+      <div style="font-size:1.3vw;margin-bottom:.8vw">■ OPERATION : 卒業おめでとう</div>
+      <div class="row"><span>回線</span><span id="ip">---</span></div>
+      <div class="row"><span>接触コード</span><span id="port">32118</span></div>
+      <div class="row"><span>公安の監視</span><span id="fw">ACTIVE</span></div>
+      <div class="row"><span>写真データ</span><span id="enc">「う」未取得</span></div>
+      <div class="row"><span>任務状況</span><span id="st">CONNECTING</span></div>
       <div id="hex"></div>
     </div>
     <div id="bar"><div id="fill"></div><div id="pct">0%</div></div>
     <div id="granted">
       <div class="big">ACCESS GRANTED</div>
-      <div class="small">WELCOME TO TOKYO</div>
+      <div class="small">別班 ― 任務を開始せよ</div>
     </div>
   </div>
 
@@ -211,18 +211,22 @@ function startHack() {
   const ip = () => `${rnd(223)+1}.${rnd(256)}.${rnd(256)}.${rnd(256)}`;
 
   const lines = [
-    ["", () => `> connect --target tokyo-node --port ${rnd(60000)+1024}`],
-    ["", () => `[*] Resolving host ${ip()} ...`],
+    ["", () => `> connect --unit beppan --code 32118 --port ${rnd(60000)+1024}`],
+    ["", () => `[*] 別班データベースに接続 ${ip()} ...`],
     ["", () => `[*] Handshake 0x${hex(4)} ... OK`],
-    ["warn", () => `[!] Firewall detected : layer ${rnd(7)+1}`],
-    ["", () => `[*] Injecting payload ${hex(8)}`],
-    ["", () => `[*] Scanning port ${rnd(65535)} ... open`],
-    ["err", () => `[x] Auth failed  retry ${rnd(9)+1}/9`],
-    ["", () => `[*] Bypass sequence ${hex(6)}`],
-    ["", () => `[*] Decrypting block #${rnd(9999)} :: ${hex(12)}`],
-    ["warn", () => `[!] Trace detected — rerouting via ${ip()}`],
+    ["", () => `[*] 卒業生リスト取得 : 4年生 / 6年生 ... OK`],
+    ["", () => `[*] 写真データ照合 「卒」「業」「お」「め」「で」「と」 ... OK`],
+    ["warn", () => `[!] 残り1枚 「う」 未取得`],
+    ["warn", () => `[!] 公安の追跡を検知 — 経路変更 via ${ip()}`],
+    ["err", () => `[x] 卒業生に気づかれるリスク : HIGH`],
+    ["", () => `[*] メニュー隊ネットワークに侵入 ${hex(6)}`],
+    ["", () => `[*] 7号館2階 端末に接続 ... open`],
+    ["", () => `[*] 秋合宿ログ 復号中 #${rnd(9999)} :: ${hex(10)}`],
+    ["", () => `[*] 水泳部 部員名簿を照合中 ${hex(8)}`],
+    ["err", () => `[x] 協力者 3名の信号ロスト  retry ${rnd(9)+1}/9`],
     ["", () => `[*] Proxy chain ${rnd(9)+2} hops established`],
-    ["ok", () => `[+] Key fragment recovered : ${hex(10)}`],
+    ["ok", () => `[+] 司令部キー断片を回収 : ${hex(10)}`],
+    ["ok", () => `[+] 接触コード 32118 認証 ... OK`],
   ];
 
   function addLine() {
@@ -238,7 +242,7 @@ function startHack() {
   cv.width = innerWidth; cv.height = innerHeight;
   const fs = 18, cols = Math.floor(cv.width / fs);
   const drops = Array(cols).fill(0).map(() => rnd(cv.height / fs));
-  const chars = "アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEF東京";
+  const chars = "アイウエオカキクケコサシスセソ0123456789ABCDEF別班卒業おめでとう任務";
 
   let granted = false;
   function frame(now) {
@@ -259,25 +263,24 @@ function startHack() {
     // 進捗
     // 段階ごとに進み方を変えて「苦戦してる感」を出す
     const stages = [
-      [0.00, "SCANNING NETWORK"],
-      [0.20, "BYPASSING FIREWALL"],
-      [0.45, "CRACKING ENCRYPTION"],
-      [0.70, "ESCALATING PRIVILEGES"],
-      [0.90, "INJECTING ROOT KEY"],
+      [0.00, "別班回線に接続中"],
+      [0.20, "公安の監視を回避中"],
+      [0.45, "写真データを復号中"],
+      [0.70, "司令部の承認を待機中"],
+      [0.90, "任務データ転送中"],
     ];
     const stage = stages.filter(s => p >= s[0]).pop()[1];
     const eased = p < .6 ? p * 1.1 : p < .8 ? .66 + (p - .6) * .3 : .72 + (p - .8) * 1.4; // 66〜78%あたりで粘る
     const shown = p >= 1 ? 100 : Math.min(99, Math.floor(eased * 100 + 1e-6));
     fill.style.width = shown + "%";
-    pct.textContent = shown < 100 ? `${stage}... ${shown}%` : "100% COMPLETE";
+    pct.textContent = shown < 100 ? `${stage}... ${shown}%` : "100% 任務承認";
 
     // サイドパネル
     $("ip").textContent = ip();
-    $("port").textContent = rnd(65535);
-    $("hex").textContent = Array.from({length:14}, () => hex(10).match(/../g).join(" ")).join("\n");
-    if (p > .35) { $("fw").textContent = "BYPASSED"; $("fw").style.color = "#ffcc00"; }
-    if (p > .65) { $("enc").textContent = "CRACKED"; $("enc").style.color = "#ff2244"; }
-    $("st").textContent = p < 1 ? "INFILTRATING" : "ROOT ACCESS";
+        $("hex").textContent = Array.from({length:14}, () => hex(10).match(/../g).join(" ")).join("\n");
+    if (p > .35) { $("fw").textContent = "回避"; $("fw").style.color = "#ffcc00"; }
+    if (p > .65) { $("enc").textContent = "「う」以外 取得済"; $("enc").style.color = "#ff2244"; }
+    $("st").textContent = p < 1 ? "潜入中" : "任務開始";
 
     // ランダムなグリッチ
     if (Math.random() < .04) { screen.classList.remove("flash"); void screen.offsetWidth; screen.classList.add("flash"); }
