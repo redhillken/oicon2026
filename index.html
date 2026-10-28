@@ -150,7 +150,7 @@
 
 <script>
 const PASSWORD = "oicont";
-const HACK_MS = 4000;   // ハッキング演出の長さ（ミリ秒）
+const HACK_MS = 9000;   // ハッキング演出の長さ（ミリ秒）
 
 const $ = id => document.getElementById(id);
 const screen = $("screen"), pw = $("pw"), msg = $("msg");
@@ -257,9 +257,19 @@ function startHack() {
     for (let i = 0; i < 2; i++) addLine();
 
     // 進捗
-    const shown = Math.floor(p * 100);
+    // 段階ごとに進み方を変えて「苦戦してる感」を出す
+    const stages = [
+      [0.00, "SCANNING NETWORK"],
+      [0.20, "BYPASSING FIREWALL"],
+      [0.45, "CRACKING ENCRYPTION"],
+      [0.70, "ESCALATING PRIVILEGES"],
+      [0.90, "INJECTING ROOT KEY"],
+    ];
+    const stage = stages.filter(s => p >= s[0]).pop()[1];
+    const eased = p < .6 ? p * 1.1 : p < .8 ? .66 + (p - .6) * .3 : .72 + (p - .8) * 1.4; // 66〜78%あたりで粘る
+    const shown = Math.min(100, Math.floor(eased * 100));
     fill.style.width = shown + "%";
-    pct.textContent = shown < 100 ? `HACKING... ${shown}%` : "100% COMPLETE";
+    pct.textContent = shown < 100 ? `${stage}... ${shown}%` : "100% COMPLETE";
 
     // サイドパネル
     $("ip").textContent = ip();
