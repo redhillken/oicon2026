@@ -215,7 +215,7 @@
     <input id="pw" type="text" autocomplete="off" spellcheck="false" autofocus>
     <div id="msg"></div>
     <div class="sub" style="font-size:.9cqw;opacity:.35">[ENTER] で認証</div>
-    <div style="position:absolute;right:1.5cqw;bottom:1.5cqh;font-size:.8cqw;opacity:.3">ver 10/28-22:15 16:9 AV</div>
+    <div style="position:absolute;right:1.5cqw;bottom:1.5cqh;font-size:.8cqw;opacity:.3">ver 10/28-22:20 16:9 AV</div>
   </div>
 
   <div id="hack">
@@ -465,7 +465,7 @@ const sfx = {
 };
 
 // ===== 【音ずれ版】すべての効果音を映像より少し遅らせて鳴らす =====
-const AV_DELAY_MS = 400;
+const AV_DELAY_MS = 1000;
 const sfxRaw = { ...sfx };
 for (const k in sfx) sfx[k] = (...a) => setTimeout(() => sfxRaw[k](...a), AV_DELAY_MS);
 
