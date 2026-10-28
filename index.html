@@ -81,7 +81,7 @@
   #log .ok   { color: #fff;    text-shadow: 0 0 8px #00ff66; }
   #side {
     position: absolute; right: 2vw; top: 2vh; width: 34vw; height: 80vh;
-    border: 1px solid #00ff66; padding: 1.2vw; font-size: 1vw;
+    border: 1px solid #00ff66; padding: 1.2vw; font-size: 1.2vw;
     box-shadow: 0 0 20px rgba(0,255,102,.3) inset; overflow: hidden;
   }
   #side .row { display: flex; justify-content: space-between; margin: .3vw 0; }
@@ -112,6 +112,37 @@
     100% { transform: translate(0,0);  text-shadow: 0 0 30px #00ff66; }
   }
   .flash { animation: flash .15s; }
+
+  /* 段階切り替えバナー */
+  #phase {
+    position: absolute; left: 50%; top: 45%; transform: translate(-50%,-50%);
+    padding: 1.4vw 4vw; border: 3px solid #00ff66; background: rgba(0,0,0,.88);
+    text-align: center; display: none; z-index: 15; white-space: nowrap;
+  }
+  #phase .n { font-size: 1.3vw; letter-spacing: .5em; opacity: .85; margin-bottom: .6vw; }
+  #phase .t { font-size: 4vw; font-weight: bold; letter-spacing: .1em; }
+  #phase.show { display: block; animation: phaseIn 1.1s forwards; }
+  @keyframes phaseIn {
+    0%   { opacity: 0; transform: translate(-50%,-50%) scale(1.5); filter: brightness(3); }
+    12%  { opacity: 1; transform: translate(-50%,-50%) scale(1);   filter: brightness(1); }
+    20%  { transform: translate(calc(-50% - 8px),-50%); }
+    25%  { transform: translate(calc(-50% + 8px),-50%); }
+    30%  { transform: translate(-50%,-50%); }
+    80%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  /* 右パネルの値が変わった瞬間 */
+  #side .row span:last-child { font-weight: bold; }
+  .hl { animation: hl 1.4s; }
+  @keyframes hl {
+    0%, 30%, 60% { background: rgba(0,255,102,.8); box-shadow: 0 0 30px #00ff66; color: #000; }
+    15%, 45%     { background: transparent; box-shadow: none; }
+    100%         { background: transparent; box-shadow: none; }
+  }
+  .hl span:last-child { display: inline-block; animation: pop .8s ease-out; transform-origin: right center; }
+  @keyframes pop { 0% { transform: scale(1.8); } 100% { transform: scale(1); } }
+  .blink { animation: blink .4s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
   @keyframes flash { 0% { filter: brightness(4) invert(1); } 100% { filter: none; } }
 </style>
 </head>
@@ -133,11 +164,12 @@
       <div style="font-size:1.3vw;margin-bottom:.8vw">■ OPERATION : 卒業おめでとう</div>
       <div class="row"><span>回線</span><span id="ip">---</span></div>
       <div class="row"><span>接触コード</span><span id="port">32118</span></div>
-      <div class="row"><span>公安の監視</span><span id="fw">ACTIVE</span></div>
-      <div class="row"><span>写真データ</span><span id="enc">「う」未取得</span></div>
+      <div class="row"><span>公安の監視</span><span id="fw" style="color:#ff2244">監視中</span></div>
+      <div class="row"><span>写真データ</span><span id="enc" style="color:#ff2244">「う」未取得</span></div>
       <div class="row"><span>任務状況</span><span id="st">CONNECTING</span></div>
       <div id="hex"></div>
     </div>
+    <div id="phase"><div class="n" id="phaseN"></div><div class="t" id="phaseT"></div></div>
     <div id="bar"><div id="fill"></div><div id="pct">0%</div></div>
     <div id="granted">
       <div class="big">ACCESS GRANTED</div>
@@ -152,6 +184,72 @@
 const PASSWORD = "oicont";
 const HACK_MS = 9000;   // ハッキング演出の長さ（ミリ秒）
 
+const SOUND = true;     // 効果音を消したいときは false
+
+// ===== 効果音（音声ファイル不要・ブラウザで合成） =====
+let ac = null, master = null;
+function audio() {
+  if (!SOUND) return null;
+  if (!ac) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    ac = new AC(); master = ac.createGain(); master.gain.value = .9; master.connect(ac.destination);
+  }
+  if (ac.state === "suspended") ac.resume();
+  return ac;
+}
+function tone(freq, dur, type = "square", vol = .08, when = 0, slideTo = 0) {
+  const a = audio(); if (!a) return;
+  const o = a.createOscillator(), g = a.createGain(), t = a.currentTime + when;
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(g).connect(master); o.start(t); o.stop(t + dur + .02);
+}
+function noise(dur, vol = .15, when = 0, lp = 0) {
+  const a = audio(); if (!a) return;
+  const len = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = a.createBufferSource(), g = a.createGain(), t = a.currentTime + when;
+  src.buffer = buf; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  let node = src;
+  if (lp) { const f = a.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = lp; node.connect(f); node = f; }
+  node.connect(g).connect(master); src.start(t);
+}
+let drone = null;
+const sfx = {
+  key:    () => tone(900 + Math.random() * 700, .035, "square", .05),
+  ok:     () => { tone(660, .09, "square", .1); tone(990, .16, "square", .1, .1); },
+  ng:     () => { tone(150, .3, "sawtooth", .18); tone(110, .4, "sawtooth", .18, .2); },
+  tvoff:  () => { tone(1800, .55, "sine", .15, 0, 50); noise(.3, .25, 0, 3000); tone(3500, .05, "sine", .12, .55); },
+  tvon:   () => { noise(.35, .18, 0, 5000); tone(60, .35, "sawtooth", .12, 0, 400); },
+  blip:   () => tone(800 + Math.random() * 1800, .02, "square", .025),
+  err:    () => tone(220, .09, "sawtooth", .06),
+  glitch: () => noise(.06, .12),
+  alert:  (urgent) => {
+    const f = urgent ? 520 : 880;
+    for (let i = 0; i < 3; i++) tone(f, .09, "square", .13, i * .13);
+  },
+  change: () => { tone(1500, .06, "triangle", .16); tone(2300, .14, "triangle", .14, .07); },
+  granted: () => {
+    tone(120, .9, "sine", .45, 0, 35); noise(.6, .2, 0, 1500);
+    [523, 659, 784, 1046].forEach((f, i) => tone(f, 1.4, "sawtooth", .05, .05 + i * .04));
+    [523, 659, 784, 1046].forEach((f, i) => tone(f, 1.6, "sine", .08, .05 + i * .04));
+  },
+  droneStart: () => {
+    const a = audio(); if (!a || drone) return;
+    const o = a.createOscillator(), f = a.createBiquadFilter(), g = a.createGain();
+    o.type = "sawtooth"; o.frequency.value = 55; f.type = "lowpass"; f.frequency.value = 300;
+    g.gain.setValueAtTime(.0001, a.currentTime); g.gain.exponentialRampToValueAtTime(.06, a.currentTime + .5);
+    o.connect(f).connect(g).connect(master); o.start(); drone = { o, g, f };
+  },
+  droneRise: (p) => { if (drone) { drone.o.frequency.value = 55 + p * 55; drone.f.frequency.value = 300 + p * 900; } },
+  droneStop: () => {
+    if (!drone) return; const a = audio();
+    drone.g.gain.exponentialRampToValueAtTime(.0001, a.currentTime + .3); drone.o.stop(a.currentTime + .35); drone = null;
+  },
+};
+
 const $ = id => document.getElementById(id);
 const screen = $("screen"), pw = $("pw"), msg = $("msg");
 
@@ -163,7 +261,7 @@ function goFull() {
   if (req) { const r = req.call(el, { navigationUI: "hide" }); if (r && r.catch) r.catch(() => {}); }
 }
 ["pointerdown", "keydown", "touchstart"].forEach(ev =>
-  document.addEventListener(ev, e => { if (e.key !== "Escape") goFull(); }, true)
+  document.addEventListener(ev, e => { if (e.key !== "Escape") { goFull(); audio(); } }, true)
 );
 document.addEventListener("click", () => pw.focus());
 window.addEventListener("load", () => pw.focus());
@@ -172,13 +270,14 @@ window.addEventListener("load", () => pw.focus());
 const norm = s => s.normalize("NFKC").replace(/\s/g, "").toLowerCase();
 
 pw.addEventListener("keydown", e => {
+  if (!pw.disabled && (e.key.length === 1 || e.key === "Backspace" || e.key === "Process")) sfx.key();
   if (e.key !== "Enter" || e.isComposing || e.keyCode === 229) return; // 変換確定のEnterは無視
   if (norm(pw.value) === norm(PASSWORD)) {
-    msg.className = ""; msg.textContent = "ACCESS CODE ACCEPTED";
+    msg.className = ""; msg.textContent = "ACCESS CODE ACCEPTED"; sfx.ok();
     pw.blur(); pw.disabled = true;
     setTimeout(tvOff, 350);
   } else {
-    msg.className = "ng"; msg.textContent = "ACCESS DENIED";
+    msg.className = "ng"; msg.textContent = "ACCESS DENIED"; sfx.ng();
     $("login").classList.remove("shake"); void $("login").offsetWidth;
     $("login").classList.add("shake");
     pw.value = "";
@@ -187,7 +286,7 @@ pw.addEventListener("keydown", e => {
 
 // テレビが消える → 少し暗転 → 点く
 function tvOff() {
-  screen.classList.add("tvoff");
+  screen.classList.add("tvoff"); sfx.tvoff();
   setTimeout(() => $("dot").classList.add("on"), 550);
   setTimeout(() => {
     $("login").style.display = "none";
@@ -197,7 +296,7 @@ function tvOff() {
   }, 750);
   setTimeout(() => {
     screen.style.opacity = 1;
-    screen.classList.add("tvon");
+    screen.classList.add("tvon"); sfx.tvon();
     startHack();
   }, 1150);
 }
@@ -233,6 +332,7 @@ function startHack() {
     const [cls, fn] = lines[rnd(lines.length)];
     const d = document.createElement("div");
     d.className = cls; d.textContent = fn();
+    if (cls === "err" && Math.random() < .3) sfx.err();
     log.appendChild(d);
     while (log.children.length > 60) log.removeChild(log.firstChild);
   }
@@ -243,6 +343,32 @@ function startHack() {
   const fs = 18, cols = Math.floor(cv.width / fs);
   const drops = Array(cols).fill(0).map(() => rnd(cv.height / fs));
   const chars = "アイウエオカキクケコサシスセソ0123456789ABCDEF別班卒業おめでとう任務";
+
+  // 段階（開始位置, 表示, 色, 緊迫感）
+  const stages = [
+    [0.00, "別班回線に接続中",     "#00ff66", false],
+    [0.20, "公安の監視を回避中",   "#ffcc00", true ],
+    [0.45, "写真データを復号中",   "#00ff66", false],
+    [0.70, "司令部の承認を待機中", "#ff2244", true ],
+    [0.90, "任務データ転送中",     "#00ccff", false],
+  ];
+  let lastStage = -1;
+  function showPhase(i) {
+    const [, text, color] = stages[i], el = $("phase");
+    $("phaseN").textContent = `PHASE ${i + 1} / ${stages.length}`;
+    $("phaseT").textContent = text;
+    el.style.color = color; el.style.borderColor = color; el.style.boxShadow = `0 0 40px ${color}`;
+    el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+  }
+  // 右パネルの値を変えて、その行を光らせる＋ログにも出す
+  function setVal(id, text, color, logText) {
+    const el = $(id); el.textContent = text; el.style.color = color;
+    const row = el.parentElement; row.classList.remove("hl"); void row.offsetWidth; row.classList.add("hl");
+    const d = document.createElement("div"); d.className = "ok"; d.textContent = logText; log.appendChild(d);
+    sfx.change();
+  }
+  const done = {};
+  sfx.droneStart();
 
   let granted = false;
   function frame(now) {
@@ -261,34 +387,35 @@ function startHack() {
     for (let i = 0; i < 2; i++) addLine();
 
     // 進捗
-    // 段階ごとに進み方を変えて「苦戦してる感」を出す
-    const stages = [
-      [0.00, "別班回線に接続中"],
-      [0.20, "公安の監視を回避中"],
-      [0.45, "写真データを復号中"],
-      [0.70, "司令部の承認を待機中"],
-      [0.90, "任務データ転送中"],
-    ];
-    const stage = stages.filter(s => p >= s[0]).pop()[1];
+    // 段階が変わった瞬間にバナー＋警告音
+    let si = 0; stages.forEach((s, i) => { if (p >= s[0]) si = i; });
+    const stage = stages[si][1];
+    if (si !== lastStage && !granted) { lastStage = si; showPhase(si); sfx.alert(stages[si][3]); }
     const eased = p < .6 ? p * 1.1 : p < .8 ? .66 + (p - .6) * .3 : .72 + (p - .8) * 1.4; // 66〜78%あたりで粘る
     const shown = p >= 1 ? 100 : Math.min(99, Math.floor(eased * 100 + 1e-6));
     fill.style.width = shown + "%";
     pct.textContent = shown < 100 ? `${stage}... ${shown}%` : "100% 任務承認";
+    pct.classList.toggle("blink", si === 3 && shown < 100);   // 承認待ちの間は点滅
+    sfx.droneRise(p);
+    if (Math.random() < .35) sfx.blip();
 
     // サイドパネル
     $("ip").textContent = ip();
         $("hex").textContent = Array.from({length:14}, () => hex(10).match(/../g).join(" ")).join("\n");
-    if (p > .35) { $("fw").textContent = "回避"; $("fw").style.color = "#ffcc00"; }
-    if (p > .65) { $("enc").textContent = "「う」以外 取得済"; $("enc").style.color = "#ff2244"; }
-    $("st").textContent = p < 1 ? "潜入中" : "任務開始";
+    if (p >= .45 && !done.fw)  { done.fw = 1;  setVal("fw",  "回避成功",          "#00ff66", "[+] ▶ 公安の監視を回避しました"); }
+    if (p >= .70 && !done.enc) { done.enc = 1; setVal("enc", "「う」以外 取得済", "#ffcc00", "[+] ▶ 写真データの復号に成功しました"); }
+    if (p >= 1  && !done.st)   { done.st = 1;  setVal("st",  "任務開始",          "#00ff66", "[+] ▶ 司令部の承認を確認しました"); }
+    if (!done.st) $("st").textContent = "潜入中";
 
     // ランダムなグリッチ
-    if (Math.random() < .04) { screen.classList.remove("flash"); void screen.offsetWidth; screen.classList.add("flash"); }
+    if (Math.random() < .04) { screen.classList.remove("flash"); void screen.offsetWidth; screen.classList.add("flash"); sfx.glitch(); }
 
     if (t >= HACK_MS - 500 && !granted) {
       granted = true;
       screen.classList.remove("flash"); void screen.offsetWidth; screen.classList.add("flash");
       $("granted").style.display = "flex";
+      $("phase").classList.remove("show");
+      sfx.droneStop(); sfx.granted();
     }
     if (t < HACK_MS) requestAnimationFrame(frame);
   }
