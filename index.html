@@ -209,7 +209,7 @@
     <input id="pw" type="text" autocomplete="off" spellcheck="false" autofocus>
     <div id="msg"></div>
     <div class="sub" style="font-size:.9cqw;opacity:.35">[ENTER] で認証</div>
-    <div style="position:absolute;right:1.5cqw;bottom:1.5cqh;font-size:.8cqw;opacity:.3">ver 10/28-20:05 16:9</div>
+    <div style="position:absolute;right:1.5cqw;bottom:1.5cqh;font-size:.8cqw;opacity:.3">ver 10/28-20:30 16:9</div>
   </div>
 
   <div id="hack">
@@ -261,10 +261,14 @@ const FILES = {
   alien: "sfx/alien.mp3", bed: "sfx/bed.mp3",    riser: "sfx/riser.mp3",
 };
 const clips = {};
+const clones = [];      // 重ねて鳴らした音（ACCESS GRANTED の直前にまとめて止めるため）
+let hushed = false;     // true のあいだは前の場面の音を新しく鳴らさない
 for (const k in FILES) { const a = new Audio(FILES[k]); a.preload = "auto"; clips[k] = a; }
 function play(k, vol = 1, clone = false) {
   if (!SOUND || !clips[k]) return null;
+  if (hushed) return null;
   const a = clone ? clips[k].cloneNode() : clips[k];
+  if (clone) clones.push(a);
   if (!clone) a.currentTime = 0;
   a.volume = Math.min(1, vol);
   const r = a.play(); if (r && r.catch) r.catch(() => {});
@@ -285,6 +289,13 @@ function audio() {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     ac = new AC();
+    makeBus();
+  }
+  if (ac.state === "suspended") ac.resume();
+  return ac;
+}
+// 出力系統（コンプ・残響・歪み）を作る。ACCESS GRANTED の直前に作り直して、前の音の残響を切る
+function makeBus() {
     // 全体を押し出すコンプ
     const comp = ac.createDynamicsCompressor();
     comp.threshold.value = -16; comp.ratio.value = 6; comp.attack.value = .003; comp.release.value = .25;
@@ -298,9 +309,19 @@ function audio() {
     dist = ac.createWaveShaper(); const n = 1024, curve = new Float32Array(n);
     for (let i = 0; i < n; i++) { const x = i * 2 / n - 1; curve[i] = Math.tanh(x * 4); }
     dist.curve = curve; dist.connect(master);
+}
+// それまで鳴っていた音（残響・警報・効果音のファイル）をすばやく消す
+function hushAll(ms = 140) {
+  hushed = true;
+  Object.values(clips).forEach(a => { if (!a.paused) fadeOut(a, ms); });
+  clones.forEach(a => { if (!a.paused) fadeOut(a, ms); });
+  if (ac && master) {
+    const old = master, t = ac.currentTime;
+    old.gain.cancelScheduledValues(t); old.gain.setValueAtTime(old.gain.value, t);
+    old.gain.linearRampToValueAtTime(0, t + ms / 1000);
+    setTimeout(() => { try { old.disconnect(); } catch (e) {} }, ms + 60);
+    makeBus();                       // これ以降の音（ACCESS GRANTED）は新しい系統で鳴らす
   }
-  if (ac.state === "suspended") ac.resume();
-  return ac;
 }
 // o: { dist: 歪ませる, wet: 残響量, lp: ローパス周波数 }
 function tone(freq, dur, type = "square", vol = .08, when = 0, slideTo = 0, o = {}) {
@@ -534,7 +555,7 @@ function startHack() {
     const [cls, fn] = lines[rnd(lines.length)];
     const d = document.createElement("div");
     d.className = cls; d.textContent = fn();
-    if (cls === "err" && Math.random() < .25) sfx.err();
+    if (cls === "err" && !granted && Math.random() < .25) sfx.err();
     log.appendChild(d);
     while (log.children.length > 60) log.removeChild(log.firstChild);
   }
@@ -631,7 +652,7 @@ function startHack() {
       if (g < 1 && now - lastTick > 110) { lastTick = now; sfx.gaugeTick(g); }
     }
     sfx.droneRise(p);
-    if (Math.random() < .25) sfx.blip();
+    if (!granted && Math.random() < .25) sfx.blip();
 
     // サイドパネル
     $("ip").textContent = ip();
@@ -642,14 +663,15 @@ function startHack() {
     if (!done.st) $("st").textContent = "潜入中";
 
     // ランダムなグリッチ
-    if (Math.random() < .04) { screen.classList.remove("flash"); void screen.offsetWidth; screen.classList.add("flash"); sfx.glitch(); }
+    if (!granted && Math.random() < .04) { screen.classList.remove("flash"); void screen.offsetWidth; screen.classList.add("flash"); sfx.glitch(); }
 
     if (t >= HACK_MS - 500 && !granted) {
       granted = true;
       screen.classList.remove("flash"); void screen.offsetWidth; screen.classList.add("flash");
       $("granted").style.display = "flex";
       $("phase").classList.remove("show"); $("alarm").classList.remove("on"); $("auth").style.display = "none";
-      sfx.droneStop(); sfx.granted();
+      sfx.droneStop(); sirenStop(); hushAll(140);
+      setTimeout(() => { hushed = false; sfx.granted(); }, 150);   // 前の音が消えてから鳴らす
       setTimeout(tvEnd, END_HOLD_MS);
     }
     if (t < HACK_MS) requestAnimationFrame(frame);
