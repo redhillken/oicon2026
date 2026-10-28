@@ -186,27 +186,69 @@ const HACK_MS = 9000;   // ハッキング演出の長さ（ミリ秒）
 
 const SOUND = true;     // 効果音を消したいときは false
 
-// ===== 効果音（音声ファイル不要・ブラウザで合成） =====
-let ac = null, master = null;
+// ===== 効果音 =====
+// sfx/ フォルダの音源（起動音・通信ノイズ・グリッチ・エラー・ライザー）＋ブラウザで合成する重低音・警報
+const FILES = {
+  boot: "sfx/boot.mp3",  trans: "sfx/trans.mp3", zap: "sfx/zap.mp3", err: "sfx/err.mp3",
+  alien: "sfx/alien.mp3", bed: "sfx/bed.mp3",    riser: "sfx/riser.mp3",
+};
+const clips = {};
+for (const k in FILES) { const a = new Audio(FILES[k]); a.preload = "auto"; clips[k] = a; }
+function play(k, vol = 1, clone = false) {
+  if (!SOUND || !clips[k]) return null;
+  const a = clone ? clips[k].cloneNode() : clips[k];
+  if (!clone) a.currentTime = 0;
+  a.volume = Math.min(1, vol);
+  const r = a.play(); if (r && r.catch) r.catch(() => {});
+  return a;
+}
+function fadeOut(a, ms = 400) {
+  if (!a) return; const v0 = a.volume, t0 = performance.now();
+  const id = setInterval(() => {
+    const k = 1 - (performance.now() - t0) / ms;
+    if (k <= 0) { a.pause(); clearInterval(id); } else a.volume = v0 * k;
+  }, 30);
+}
+
+let ac = null, master = null, verb = null, dist = null;
 function audio() {
   if (!SOUND) return null;
   if (!ac) {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
-    ac = new AC(); master = ac.createGain(); master.gain.value = .9; master.connect(ac.destination);
+    ac = new AC();
+    // 全体を押し出すコンプ
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.ratio.value = 6; comp.attack.value = .003; comp.release.value = .25;
+    master = ac.createGain(); master.gain.value = 1; master.connect(comp).connect(ac.destination);
+    // 残響（重厚感）
+    const len = ac.sampleRate * 3, ir = ac.createBuffer(2, len, ac.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5); }
+    const conv = ac.createConvolver(); conv.buffer = ir;
+    verb = ac.createGain(); verb.gain.value = .5; verb.connect(conv).connect(master);
+    // 歪み（警報・低音を荒く）
+    dist = ac.createWaveShaper(); const n = 1024, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const x = i * 2 / n - 1; curve[i] = Math.tanh(x * 4); }
+    dist.curve = curve; dist.connect(master);
   }
   if (ac.state === "suspended") ac.resume();
   return ac;
 }
-function tone(freq, dur, type = "square", vol = .08, when = 0, slideTo = 0) {
+// o: { dist: 歪ませる, wet: 残響量, lp: ローパス周波数 }
+function tone(freq, dur, type = "square", vol = .08, when = 0, slideTo = 0, o = {}) {
   const a = audio(); if (!a) return;
-  const o = a.createOscillator(), g = a.createGain(), t = a.currentTime + when;
-  o.type = type; o.frequency.setValueAtTime(freq, t);
-  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
-  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
-  o.connect(g).connect(master); o.start(t); o.stop(t + dur + .02);
+  const osc = a.createOscillator(), g = a.createGain(), t = a.currentTime + when;
+  osc.type = type; osc.frequency.setValueAtTime(freq, t);
+  if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .005);
+  g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  let node = osc;
+  if (o.lp) { const f = a.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = o.lp; node.connect(f); node = f; }
+  node.connect(g); g.connect(o.dist ? dist : master);
+  if (o.wet) { const s = a.createGain(); s.gain.value = o.wet; g.connect(s).connect(verb); }
+  osc.start(t); osc.stop(t + dur + .05);
 }
-function noise(dur, vol = .15, when = 0, lp = 0) {
+function noise(dur, vol = .15, when = 0, lp = 0, wet = 0) {
   const a = audio(); if (!a) return;
   const len = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
@@ -214,39 +256,75 @@ function noise(dur, vol = .15, when = 0, lp = 0) {
   src.buffer = buf; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
   let node = src;
   if (lp) { const f = a.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = lp; node.connect(f); node = f; }
-  node.connect(g).connect(master); src.start(t);
+  node.connect(g).connect(master);
+  if (wet) { const s = a.createGain(); s.gain.value = wet; g.connect(s).connect(verb); }
+  src.start(t);
 }
-let drone = null;
+// ドン：腹に響く衝撃音
+function boom(vol = .7, from = 140, to = 30, dur = 1.4, when = 0) {
+  tone(from, dur, "sine", vol, when, to, { wet: .4 });
+  tone(from / 2, dur * .8, "triangle", vol * .5, when, to / 1.5, { dist: true, lp: 400 });
+  noise(.35, vol * .45, when, 900, .5);
+}
+// キーン：金属的な打撃音
+function metal(vol = .06, when = 0) {
+  [523, 1187, 1873, 2711, 3557].forEach((f, i) => tone(f, 1.6 - i * .2, "sine", vol, when, 0, { wet: .9 }));
+}
+// ウーウー：警報（クラクション）
+function klaxon(times = 3, hi = 760, lo = 540, vol = .16) {
+  for (let i = 0; i < times; i++) {
+    const w = i * .42;
+    tone(hi, .2, "sawtooth", vol, w,       0, { dist: true, lp: 2400, wet: .3 });
+    tone(lo, .2, "sawtooth", vol, w + .21, 0, { dist: true, lp: 2400, wet: .3 });
+  }
+}
+let drone = null, bedA = null, riserA = null;
 const sfx = {
-  key:    () => tone(900 + Math.random() * 700, .035, "square", .05),
-  ok:     () => { tone(660, .09, "square", .1); tone(990, .16, "square", .1, .1); },
-  ng:     () => { tone(150, .3, "sawtooth", .18); tone(110, .4, "sawtooth", .18, .2); },
-  tvoff:  () => { tone(1800, .55, "sine", .15, 0, 50); noise(.3, .25, 0, 3000); tone(3500, .05, "sine", .12, .55); },
-  tvon:   () => { noise(.35, .18, 0, 5000); tone(60, .35, "sawtooth", .12, 0, 400); },
-  blip:   () => tone(800 + Math.random() * 1800, .02, "square", .025),
-  err:    () => tone(220, .09, "sawtooth", .06),
-  glitch: () => noise(.06, .12),
-  alert:  (urgent) => {
-    const f = urgent ? 520 : 880;
-    for (let i = 0; i < 3; i++) tone(f, .09, "square", .13, i * .13);
+  key:    () => { noise(.045, .22, 0, 2200); tone(150, .07, "sine", .3, 0, 60); },
+  ok:     () => { play("boot", 1); tone(880, .12, "square", .08, 0, 0, { wet: .5 }); },
+  ng:     () => { play("err", 1, true); klaxon(1, 220, 160, .22); },
+  tvoff:  () => { play("zap", .9); boom(.6, 220, 25, 1.1); },
+  tvon:   () => { play("trans", 1); boom(.8, 90, 28, 1.8); metal(.05); },
+  blip:   () => tone(1200 + Math.random() * 1600, .018, "square", .02),
+  err:    () => play("err", .7, true),
+  glitch: () => { noise(.07, .14); },
+  // 段階切り替え：衝撃音＋警報（緊迫フェーズは長めのサイレン）
+  phase:  (i, urgent) => {
+    boom(.65, 120, 32, 1.3); metal(.05);
+    if (urgent) klaxon(3); else klaxon(1, 1046, 784, .1);
+    if (i === 2) play("alien", .45);               // 写真データ復号中：データ通信音
   },
-  change: () => { tone(1500, .06, "triangle", .16); tone(2300, .14, "triangle", .14, .07); },
-  granted: () => {
-    tone(120, .9, "sine", .45, 0, 35); noise(.6, .2, 0, 1500);
-    [523, 659, 784, 1046].forEach((f, i) => tone(f, 1.4, "sawtooth", .05, .05 + i * .04));
-    [523, 659, 784, 1046].forEach((f, i) => tone(f, 1.6, "sine", .08, .05 + i * .04));
-  },
-  droneStart: () => {
+  change: () => { metal(.08); tone(1568, .25, "triangle", .12, 0, 0, { wet: .6 }); },
+  hackStart: () => {
+    bedA = play("bed", .6); riserA = play("riser", .85);   // ライザーは ACCESS GRANTED の瞬間に頂点
     const a = audio(); if (!a || drone) return;
-    const o = a.createOscillator(), f = a.createBiquadFilter(), g = a.createGain();
-    o.type = "sawtooth"; o.frequency.value = 55; f.type = "lowpass"; f.frequency.value = 300;
-    g.gain.setValueAtTime(.0001, a.currentTime); g.gain.exponentialRampToValueAtTime(.06, a.currentTime + .5);
-    o.connect(f).connect(g).connect(master); o.start(); drone = { o, g, f };
+    // 重低音のうなり＋心拍のような脈動
+    const o1 = a.createOscillator(), o2 = a.createOscillator(), f = a.createBiquadFilter(), g = a.createGain();
+    const lfo = a.createOscillator(), lg = a.createGain();
+    o1.type = o2.type = "sawtooth"; o1.frequency.value = 41; o2.frequency.value = 41.6;
+    f.type = "lowpass"; f.frequency.value = 220;
+    g.gain.setValueAtTime(.0001, a.currentTime); g.gain.exponentialRampToValueAtTime(.16, a.currentTime + .6);
+    lfo.frequency.value = 1.3; lg.gain.value = .09; lfo.connect(lg).connect(g.gain);
+    o1.connect(f); o2.connect(f); f.connect(g).connect(master);
+    o1.start(); o2.start(); lfo.start(); drone = { o1, o2, f, g, lfo };
   },
-  droneRise: (p) => { if (drone) { drone.o.frequency.value = 55 + p * 55; drone.f.frequency.value = 300 + p * 900; } },
+  droneRise: (p) => {
+    if (!drone) return;
+    drone.lfo.frequency.value = 1.3 + p * 4;          // 脈がだんだん速く
+    drone.f.frequency.value = 220 + p * 700;          // だんだん明るく
+    drone.o1.frequency.value = 41 + p * 14; drone.o2.frequency.value = 41.6 + p * 14;
+  },
   droneStop: () => {
-    if (!drone) return; const a = audio();
-    drone.g.gain.exponentialRampToValueAtTime(.0001, a.currentTime + .3); drone.o.stop(a.currentTime + .35); drone = null;
+    if (!drone) return; const a = audio(), t = a.currentTime;
+    drone.g.gain.cancelScheduledValues(t); drone.g.gain.setValueAtTime(.1, t);
+    drone.g.gain.exponentialRampToValueAtTime(.0001, t + .15);
+    [drone.o1, drone.o2, drone.lfo].forEach(o => o.stop(t + .2)); drone = null;
+  },
+  granted: () => {
+    fadeOut(bedA, 300); fadeOut(riserA, 250);
+    boom(1, 170, 24, 3); noise(1.2, .35, 0, 3000, .8); metal(.1);
+    [55, 82.4, 110].forEach(f => tone(f, 2.6, "sawtooth", .1, .02, 0, { dist: true, lp: 900, wet: .5 }));
+    [523, 659, 784].forEach((f, i) => tone(f, 2.2, "sine", .05, .1 + i * .05, 0, { wet: .8 }));
   },
 };
 
@@ -332,7 +410,7 @@ function startHack() {
     const [cls, fn] = lines[rnd(lines.length)];
     const d = document.createElement("div");
     d.className = cls; d.textContent = fn();
-    if (cls === "err" && Math.random() < .3) sfx.err();
+    if (cls === "err" && Math.random() < .25) sfx.err();
     log.appendChild(d);
     while (log.children.length > 60) log.removeChild(log.firstChild);
   }
@@ -368,7 +446,7 @@ function startHack() {
     sfx.change();
   }
   const done = {};
-  sfx.droneStart();
+  sfx.hackStart();
 
   let granted = false;
   function frame(now) {
@@ -390,14 +468,14 @@ function startHack() {
     // 段階が変わった瞬間にバナー＋警告音
     let si = 0; stages.forEach((s, i) => { if (p >= s[0]) si = i; });
     const stage = stages[si][1];
-    if (si !== lastStage && !granted) { lastStage = si; showPhase(si); sfx.alert(stages[si][3]); }
+    if (si !== lastStage && !granted) { lastStage = si; showPhase(si); sfx.phase(si, stages[si][3]); }
     const eased = p < .6 ? p * 1.1 : p < .8 ? .66 + (p - .6) * .3 : .72 + (p - .8) * 1.4; // 66〜78%あたりで粘る
     const shown = p >= 1 ? 100 : Math.min(99, Math.floor(eased * 100 + 1e-6));
     fill.style.width = shown + "%";
     pct.textContent = shown < 100 ? `${stage}... ${shown}%` : "100% 任務承認";
     pct.classList.toggle("blink", si === 3 && shown < 100);   // 承認待ちの間は点滅
     sfx.droneRise(p);
-    if (Math.random() < .35) sfx.blip();
+    if (Math.random() < .25) sfx.blip();
 
     // サイドパネル
     $("ip").textContent = ip();

@@ -20,5 +20,10 @@
 
 ## 効果音
 
-キー入力・認証・テレビが消える音・ハッキング中の電子音・段階切り替えの警告音・ACCESS GRANTED の音が鳴ります（音声ファイル不要）。
+`sfx/` フォルダの音源と、ブラウザで合成する重低音・警報・衝撃音を組み合わせています。
+ハッキング中は低いうなりが心拍のように脈打ちながら速くなり、ライザー音が ACCESS GRANTED の瞬間に頂点を迎えます。
 音を消したいときは `index.html` の `SOUND = true` を `false` にしてください。
+
+### 音源クレジット
+- Pixabay: koiroylers「glitch zap」/ kuzu420「err」/ lucadialessandro「little alien」/ soumages「glitchy sound」/ u_l2ubb7ipxx「bell riser」
+- ElevenLabs で生成した効果音（ターミナル起動音・通信ノイズ）
