@@ -156,6 +156,40 @@
   }
   .warnbar span { background: #c00018; padding: 0 2vw; }
   .warnbar.top { top: 0; } .warnbar.bottom { bottom: 0; }
+  /* 承認待ちパネル（ゲージ） */
+  #auth {
+    position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%); z-index: 15;
+    width: 56vw; padding: 1.6vw 3vw; background: rgba(0,0,0,.9); color: #00ccff;
+    border: 3px solid #00ccff; box-shadow: 0 0 40px #00ccff; text-align: center; display: none;
+  }
+  #auth.show { display: block; animation: authIn .5s ease-out; }
+  @keyframes authIn {
+    0%  { opacity: 0; transform: translate(-50%,-50%) scale(1.4); filter: brightness(3); }
+    100%{ opacity: 1; transform: translate(-50%,-50%) scale(1);   filter: none; }
+  }
+  #auth .n { font-size: 1.3vw; letter-spacing: .5em; opacity: .85; }
+  #auth .t { font-size: 3.6vw; font-weight: bold; margin: .6vw 0 1.2vw; }
+  #auth .who { display: flex; justify-content: space-around; font-size: 2.4vw; margin-bottom: 1.2vw; }
+  #auth .who span.okd { color: #fff; text-shadow: 0 0 12px #00ccff; }
+  #auth .gauge { height: 2.4vw; border: 2px solid #00ccff; padding: 3px; }
+  #afill { height: 100%; width: 0%; background: repeating-linear-gradient(90deg, #00ccff 0 1.2vw, transparent 1.2vw 1.5vw); box-shadow: 0 0 15px #00ccff; }
+  #apct { font-size: 2.2vw; font-weight: bold; margin-top: .6vw; letter-spacing: .1em; }
+  /* 見る人に伝えたい出来事（大きめの字幕） */
+  #caps {
+    position: absolute; left: 50%; bottom: 13vh; transform: translateX(-50%); z-index: 14;
+    display: flex; flex-direction: column; align-items: center; gap: .8vh; pointer-events: none;
+  }
+  .cap {
+    font-size: 2.8vw; font-weight: bold; padding: .5vw 2.2vw; white-space: nowrap;
+    background: rgba(0,0,0,.88); border-left: .6vw solid; border-right: .6vw solid;
+    animation: capLife 2.8s forwards;
+  }
+  @keyframes capLife {
+    0%   { opacity: 0; transform: translateY(1.5vh) scale(1.08); }
+    8%   { opacity: 1; transform: none; }
+    85%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
   .blink { animation: blink .4s steps(2) infinite; }
   @keyframes blink { 50% { opacity: .2; } }
   @keyframes flash { 0% { filter: brightness(4) invert(1); } 100% { filter: none; } }
@@ -170,7 +204,7 @@
     <input id="pw" type="text" autocomplete="off" spellcheck="false" autofocus>
     <div id="msg"></div>
     <div class="sub" style="font-size:.9vw;opacity:.35">[ENTER] で認証</div>
-    <div style="position:absolute;right:1.5vw;bottom:1.5vh;font-size:.8vw;opacity:.3">ver 10/28-14:55</div>
+    <div style="position:absolute;right:1.5vw;bottom:1.5vh;font-size:.8vw;opacity:.3">ver 10/28-15:10</div>
   </div>
 
   <div id="hack">
@@ -189,6 +223,14 @@
       <div class="warnbar top"><span>⚠ WARNING ⚠ 監視を検知</span></div>
       <div class="warnbar bottom"><span>⚠ ALERT ⚠ 直ちに回避せよ</span></div>
     </div>
+    <div id="auth">
+      <div class="n">PHASE 4 / 5</div>
+      <div class="t">冨永・葛岡の承認を待機中</div>
+      <div class="who"><span id="a1">冨永 …… 待機中</span><span id="a2">葛岡 …… 待機中</span></div>
+      <div class="gauge"><div id="afill"></div></div>
+      <div id="apct">0%</div>
+    </div>
+    <div id="caps"></div>
     <div id="phase"><div class="n" id="phaseN"></div><div class="t" id="phaseT"></div></div>
     <div id="bar"><div id="fill"></div><div id="pct">0%</div></div>
     <div id="granted">
@@ -202,7 +244,7 @@
 
 <script>
 const PASSWORD = "oicont";
-const HACK_MS = 9000;   // ハッキング演出の長さ（ミリ秒）
+const HACK_MS = 16000;   // ハッキング演出の長さ（ミリ秒）
 
 const SOUND = true;     // 効果音を消したいときは false
 
@@ -333,13 +375,28 @@ const sfx = {
   glitch: () => { noise(.07, .14); },
   // 段階切り替え：衝撃音＋警報（緊迫フェーズは長めのサイレン）
   phase:  (i, urgent) => {
+    if (i === 3) {                                  // 承認待ち：警報ではなく電子音
+      sirenStop(); [1318.5, 1568, 2093].forEach((f, k) => tone(f, .14, "sine", .12, k * .09, 0, { wet: .5 }));
+      return;
+    }
     boom(.65, 120, 32, 1.3); metal(.05);
     if (urgent) { klaxon(2); sirenStart(); } else { sirenStop(); klaxon(1, 1046, 784, .1); }
     if (i === 2) play("alien", .45);               // 写真データ復号中：データ通信音
   },
+  // 承認ゲージが進むカチカチ音（だんだん高く）
+  gaugeTick: (g) => { tone(500 + g * 1300, .04, "sine", .08); tone(3000 + Math.random() * 800, .015, "square", .02); },
+  // 承認されたときのピロン
+  approve: () => { tone(1568, .12, "triangle", .14, 0, 0, { wet: .6 }); tone(2093, .3, "triangle", .14, .1, 0, { wet: .7 }); },
+  // 大きい字幕が出るときの通知音
+  cap: (color) => {
+    if (color === "#ff2244") { tone(330, .12, "square", .1, 0, 0, { dist: true }); tone(247, .2, "square", .1, .12, 0, { dist: true }); }
+    else { tone(1760, .05, "sine", .1); tone(2349, .08, "sine", .1, .06); }
+  },
   change: () => { metal(.08); tone(1568, .25, "triangle", .12, 0, 0, { wet: .6 }); },
   hackStart: () => {
-    bedA = play("bed", .6); riserA = play("riser", .85);   // ライザーは ACCESS GRANTED の瞬間に頂点
+    bedA = play("bed", .6); if (bedA) bedA.loop = true;
+    // ライザー（12.2秒で頂点）を ACCESS GRANTED の瞬間に頂点が来るよう遅らせて鳴らす
+    setTimeout(() => { riserA = play("riser", .85); }, Math.max(0, HACK_MS - 500 - 12200));
     const a = audio(); if (!a || drone) return;
     // 重低音のうなり＋心拍のような脈動
     const o1 = a.createOscillator(), o2 = a.createOscillator(), f = a.createBiquadFilter(), g = a.createGain();
@@ -364,10 +421,12 @@ const sfx = {
     [drone.o1, drone.o2, drone.lfo].forEach(o => o.stop(t + .2)); drone = null;
   },
   granted: () => {
+    // 衝撃音ではなく、かっこよくて安心できる電子音（上昇アルペジオ → 明るい和音）
     sirenStop(); fadeOut(bedA, 300); fadeOut(riserA, 250);
-    boom(1, 170, 24, 3); noise(1.2, .35, 0, 3000, .8); metal(.1);
-    [55, 82.4, 110].forEach(f => tone(f, 2.6, "sawtooth", .1, .02, 0, { dist: true, lp: 900, wet: .5 }));
-    [523, 659, 784].forEach((f, i) => tone(f, 2.2, "sine", .05, .1 + i * .05, 0, { wet: .8 }));
+    [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568].forEach((f, i) => tone(f, .45, "triangle", .1, i * .06, 0, { wet: .7 }));
+    [523.25, 659.25, 783.99, 987.77, 1174.7].forEach(f => tone(f, 2.8, "sine", .055, .38, 0, { wet: .9 }));
+    tone(130.8, 2.2, "sine", .12, .38, 0, { wet: .4 });
+    [2093, 2637, 3136].forEach((f, i) => tone(f, .6, "sine", .03, .45 + i * .08, 0, { wet: .9 }));
   },
 };
 
@@ -473,8 +532,8 @@ function startHack() {
   const stages = [
     [0.00, "卒業生専用回線に接続中", "#00ff66", false],
     [0.20, "藤井・山口の監視を回避中", "#ffcc00", true ],
-    [0.45, "写真データを復号中",   "#00ff66", false],
-    [0.70, "冨永・葛岡の承認を待機中", "#ff2244", true ],
+    [0.42, "写真データを復号中",   "#00ff66", false],
+    [0.62, "冨永・葛岡の承認を待機中", "#00ccff", false],
     [0.90, "任務データ転送中",     "#00ccff", false],
   ];
   let lastStage = -1;
@@ -493,6 +552,21 @@ function startHack() {
     sfx.change();
   }
   const done = {};
+  // 大きい字幕（見る人に伝えたい出来事）
+  const caps = [
+    [0.05, "萩原から暗号通信を受信",           "#00ff66"],
+    [0.12, "ドラム 7号館2階で待機中",          "#00ff66"],
+    [0.27, "藤井の視線を検知 ― 経路を変更",    "#ffcc00"],
+    [0.35, "大山・赤岡・ドラムの信号ロスト",   "#ff2244"],
+    [0.48, "葛岡の端末から写真データを送信中", "#00ff66"],
+    [0.55, "冨永 認証トークン照合中",          "#00ccff"],
+  ];
+  function showCap(text, color) {
+    const d = document.createElement("div"); d.className = "cap"; d.textContent = text;
+    d.style.color = color; d.style.borderColor = color; d.style.boxShadow = `0 0 25px ${color}`;
+    $("caps").appendChild(d); setTimeout(() => d.remove(), 2800); sfx.cap(color);
+  }
+  let lastTick = 0;
   sfx.hackStart();
 
   let granted = false;
@@ -516,23 +590,36 @@ function startHack() {
     let si = 0; stages.forEach((s, i) => { if (p >= s[0]) si = i; });
     const stage = stages[si][1];
     if (si !== lastStage && !granted) {
-      lastStage = si; showPhase(si); sfx.phase(si, stages[si][3]);
-      $("alarm").classList.toggle("on", stages[si][3]);           // 緊迫フェーズは警報表示
+      lastStage = si; sfx.phase(si, stages[si][3]);
+      if (si === 3) { const el = $("auth"); el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); }
+      else { $("auth").style.display = "none"; $("auth").classList.remove("show"); showPhase(si); }
+      $("alarm").classList.toggle("on", stages[si][3]);           // 監視回避の段階だけ赤い警報表示
     }
     if (stages[si][3] && !granted && now - (window._bp || 0) > 650) { window._bp = now; sfx.beeps(); }
     const eased = p < .6 ? p * 1.1 : p < .8 ? .66 + (p - .6) * .3 : .72 + (p - .8) * 1.4; // 66〜78%あたりで粘る
     const shown = p >= 1 ? 100 : Math.min(99, Math.floor(eased * 100 + 1e-6));
     fill.style.width = shown + "%";
     pct.textContent = shown < 100 ? `${stage}... ${shown}%` : "100% 任務承認";
-    pct.classList.toggle("blink", si === 3 && shown < 100);   // 承認待ちの間は点滅
+    // 大きい字幕
+    caps.forEach((c, i) => { if (p >= c[0] && !done["c" + i]) { done["c" + i] = 1; showCap(c[1], c[2]); } });
+    // 承認待ちゲージ
+    if (si === 3 && !granted) {
+      $("auth").style.display = "block";
+      const g = Math.min(1, (p - stages[3][0]) / (stages[4][0] - stages[3][0] - .02));
+      $("afill").style.width = (g * 100).toFixed(1) + "%";
+      $("apct").textContent = g < 1 ? `承認待ち ${Math.floor(g * 100)}%` : "承認完了 100%";
+      if (g >= .5 && !done.a1) { done.a1 = 1; const e = $("a1"); e.textContent = "冨永 …… 承認 ✓"; e.className = "okd"; sfx.approve(); }
+      if (g >= 1  && !done.a2) { done.a2 = 1; const e = $("a2"); e.textContent = "葛岡 …… 承認 ✓"; e.className = "okd"; sfx.approve(); }
+      if (g < 1 && now - lastTick > 110) { lastTick = now; sfx.gaugeTick(g); }
+    }
     sfx.droneRise(p);
     if (Math.random() < .25) sfx.blip();
 
     // サイドパネル
     $("ip").textContent = ip();
         $("hex").textContent = Array.from({length:14}, () => hex(10).match(/../g).join(" ")).join("\n");
-    if (p >= .45 && !done.fw)  { done.fw = 1;  setVal("fw",  "回避成功",          "#00ff66", "[+] ▶ 藤井・山口の監視を回避しました"); }
-    if (p >= .70 && !done.enc) { done.enc = 1; setVal("enc", "「う」以外 取得済", "#ffcc00", "[+] ▶ 写真データの復号に成功しました"); }
+    if (p >= .42 && !done.fw)  { done.fw = 1;  setVal("fw",  "回避成功",          "#00ff66", "[+] ▶ 藤井・山口の監視を回避しました"); }
+    if (p >= .62 && !done.enc) { done.enc = 1; setVal("enc", "「う」以外 取得済", "#ffcc00", "[+] ▶ 写真データの復号に成功しました"); }
     if (p >= 1  && !done.st)   { done.st = 1;  setVal("st",  "任務開始",          "#00ff66", "[+] ▶ 冨永・葛岡の承認を確認しました"); }
     if (!done.st) $("st").textContent = "潜入中";
 
@@ -543,7 +630,7 @@ function startHack() {
       granted = true;
       screen.classList.remove("flash"); void screen.offsetWidth; screen.classList.add("flash");
       $("granted").style.display = "flex";
-      $("phase").classList.remove("show"); $("alarm").classList.remove("on");
+      $("phase").classList.remove("show"); $("alarm").classList.remove("on"); $("auth").style.display = "none";
       sfx.droneStop(); sfx.granted();
     }
     if (t < HACK_MS) requestAnimationFrame(frame);
