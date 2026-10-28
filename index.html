@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>SYSTEM ACCESS</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #000; color: #00ff66;
+    font-family: "Consolas", "MS Gothic", "Menlo", monospace;
+    cursor: default;
+  }
+  #screen { position: fixed; inset: 0; background: #000; transform-origin: center; }
+
+  /* 走査線 */
+  #screen::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.25) 0 1px, transparent 1px 3px);
+    z-index: 50;
+  }
+
+  /* ===== パスワード画面 ===== */
+  #login {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3vh; text-shadow: 0 0 10px #00ff66;
+  }
+  #login .title { font-size: 2.2vw; letter-spacing: .4em; opacity: .85; }
+  #login .sub { font-size: 1.2vw; letter-spacing: .3em; opacity: .6; }
+  #pw {
+    width: 80vw; text-align: center;
+    font-size: 9vw; font-family: inherit; font-weight: bold;
+    background: transparent; border: none; outline: none;
+    color: #00ff66; caret-color: #00ff66;
+    border-bottom: 3px solid #00ff66;
+    text-shadow: 0 0 20px #00ff66;
+  }
+  #msg { font-size: 2vw; height: 3vw; letter-spacing: .3em; }
+  #msg.ng { color: #ff2244; text-shadow: 0 0 12px #ff2244; }
+  .shake { animation: shake .35s; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-25px); } 40% { transform: translateX(25px); }
+    60% { transform: translateX(-15px); } 80% { transform: translateX(15px); }
+  }
+
+  /* ===== テレビが消える演出 ===== */
+  .tvoff { animation: tvoff .7s cubic-bezier(.6,0,.4,1) forwards; }
+  @keyframes tvoff {
+    0%   { transform: scale(1,1);        filter: brightness(1); }
+    45%  { transform: scale(1,.004);     filter: brightness(6); background:#fff; }
+    75%  { transform: scale(.003,.004);  filter: brightness(10); background:#fff; }
+    100% { transform: scale(0,0);        filter: brightness(10); opacity: 0; }
+  }
+  #dot {
+    position: fixed; left: 50%; top: 50%; width: 6px; height: 6px;
+    margin: -3px 0 0 -3px; border-radius: 50%; background: #fff;
+    box-shadow: 0 0 30px 12px #fff; opacity: 0; pointer-events: none;
+  }
+  #dot.on { animation: dot .45s ease-out forwards; }
+  @keyframes dot { 0% { opacity: 1; transform: scale(1.5); } 100% { opacity: 0; transform: scale(0); } }
+
+  .tvon { animation: tvon .3s ease-out forwards; }
+  @keyframes tvon {
+    0%   { transform: scale(1,.004); filter: brightness(8); }
+    100% { transform: scale(1,1);    filter: brightness(1); }
+  }
+
+  /* ===== ハッキング画面 ===== */
+  #hack { position: absolute; inset: 0; display: none; }
+  #rain { position: absolute; inset: 0; opacity: .35; }
+  #log {
+    position: absolute; left: 2vw; top: 2vh; width: 60vw; height: 80vh;
+    overflow: hidden; font-size: 1.05vw; line-height: 1.35;
+    white-space: pre; text-shadow: 0 0 6px #00ff66;
+    display: flex; flex-direction: column; justify-content: flex-end;
+  }
+  #log .warn { color: #ffcc00; text-shadow: 0 0 6px #ffcc00; }
+  #log .err  { color: #ff2244; text-shadow: 0 0 6px #ff2244; }
+  #log .ok   { color: #fff;    text-shadow: 0 0 8px #00ff66; }
+  #side {
+    position: absolute; right: 2vw; top: 2vh; width: 34vw; height: 80vh;
+    border: 1px solid #00ff66; padding: 1.2vw; font-size: 1vw;
+    box-shadow: 0 0 20px rgba(0,255,102,.3) inset; overflow: hidden;
+  }
+  #side .row { display: flex; justify-content: space-between; margin: .3vw 0; }
+  #hex { margin-top: 1vw; opacity: .7; white-space: pre; line-height: 1.3; }
+  #bar {
+    position: absolute; left: 2vw; right: 2vw; bottom: 5vh; height: 4vh;
+    border: 2px solid #00ff66; box-shadow: 0 0 15px #00ff66;
+  }
+  #fill { height: 100%; width: 0%; background: #00ff66; box-shadow: 0 0 25px #00ff66; }
+  #pct {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 1.6vw; font-weight: bold; mix-blend-mode: difference; color: #fff;
+  }
+  #granted {
+    position: absolute; inset: 0; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.75); z-index: 20;
+  }
+  #granted .big {
+    font-size: 9vw; font-weight: bold; letter-spacing: .1em;
+    color: #00ff66; text-shadow: 0 0 30px #00ff66, 0 0 60px #00ff66;
+    animation: glitch .25s steps(2) 3;
+  }
+  #granted .small { font-size: 2vw; letter-spacing: .5em; margin-top: 2vh; }
+  @keyframes glitch {
+    0%   { transform: translate(0,0);  text-shadow: 4px 0 #ff0044, -4px 0 #00ccff; }
+    50%  { transform: translate(-6px,3px); text-shadow: -6px 0 #ff0044, 6px 0 #00ccff; }
+    100% { transform: translate(0,0);  text-shadow: 0 0 30px #00ff66; }
+  }
+  .flash { animation: flash .15s; }
+  @keyframes flash { 0% { filter: brightness(4) invert(1); } 100% { filter: none; } }
+</style>
+</head>
+<body>
+<div id="screen">
+
+  <div id="login">
+    <div class="title">SECURE TERMINAL v4.7.2</div>
+    <div class="sub">ENTER ACCESS CODE</div>
+    <input id="pw" type="text" autocomplete="off" spellcheck="false" autofocus>
+    <div id="msg"></div>
+    <div class="sub" style="font-size:.9vw;opacity:.35">[ENTER] で認証</div>
+  </div>
+
+  <div id="hack">
+    <canvas id="rain"></canvas>
+    <div id="log"></div>
+    <div id="side">
+      <div style="font-size:1.3vw;margin-bottom:.8vw">■ TARGET : TOKYO-NODE</div>
+      <div class="row"><span>IP</span><span id="ip">---</span></div>
+      <div class="row"><span>PORT</span><span id="port">---</span></div>
+      <div class="row"><span>FIREWALL</span><span id="fw">ACTIVE</span></div>
+      <div class="row"><span>ENCRYPTION</span><span id="enc">AES-256</span></div>
+      <div class="row"><span>STATUS</span><span id="st">CONNECTING</span></div>
+      <div id="hex"></div>
+    </div>
+    <div id="bar"><div id="fill"></div><div id="pct">0%</div></div>
+    <div id="granted">
+      <div class="big">ACCESS GRANTED</div>
+      <div class="small">WELCOME TO TOKYO</div>
+    </div>
+  </div>
+
+</div>
+<div id="dot"></div>
+
+<script>
+const PASSWORD = "yes東京";
+const HACK_MS = 4000;   // ハッキング演出の長さ（ミリ秒）
+
+const $ = id => document.getElementById(id);
+const screen = $("screen"), pw = $("pw"), msg = $("msg");
+
+// どこをクリックしても入力欄に戻る＋全画面化
+document.addEventListener("click", () => {
+  pw.focus();
+  if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
+});
+window.addEventListener("load", () => pw.focus());
+
+// 全角英字・大文字・空白を吸収して判定
+const norm = s => s.normalize("NFKC").replace(/\s/g, "").toLowerCase();
+
+pw.addEventListener("keydown", e => {
+  if (e.key !== "Enter" || e.isComposing || e.keyCode === 229) return; // 変換確定のEnterは無視
+  if (norm(pw.value) === norm(PASSWORD)) {
+    msg.className = ""; msg.textContent = "ACCESS CODE ACCEPTED";
+    pw.blur(); pw.disabled = true;
+    setTimeout(tvOff, 350);
+  } else {
+    msg.className = "ng"; msg.textContent = "ACCESS DENIED";
+    $("login").classList.remove("shake"); void $("login").offsetWidth;
+    $("login").classList.add("shake");
+    pw.value = "";
+  }
+});
+
+// テレビが消える → 少し暗転 → 点く
+function tvOff() {
+  screen.classList.add("tvoff");
+  setTimeout(() => $("dot").classList.add("on"), 550);
+  setTimeout(() => {
+    $("login").style.display = "none";
+    $("hack").style.display = "block";
+    screen.classList.remove("tvoff");
+    screen.style.opacity = 0;
+  }, 750);
+  setTimeout(() => {
+    screen.style.opacity = 1;
+    screen.classList.add("tvon");
+    startHack();
+  }, 1150);
+}
+
+// ===== ハッキング演出 =====
+function startHack() {
+  const t0 = performance.now();
+  const log = $("log"), fill = $("fill"), pct = $("pct");
+  const rnd = n => Math.floor(Math.random() * n);
+  const hex = n => Array.from({length:n}, () => rnd(256).toString(16).padStart(2,"0")).join("").toUpperCase();
+  const ip = () => `${rnd(223)+1}.${rnd(256)}.${rnd(256)}.${rnd(256)}`;
+
+  const lines = [
+    ["", () => `> connect --target tokyo-node --port ${rnd(60000)+1024}`],
+    ["", () => `[*] Resolving host ${ip()} ...`],
+    ["", () => `[*] Handshake 0x${hex(4)} ... OK`],
+    ["warn", () => `[!] Firewall detected : layer ${rnd(7)+1}`],
+    ["", () => `[*] Injecting payload ${hex(8)}`],
+    ["", () => `[*] Scanning port ${rnd(65535)} ... open`],
+    ["err", () => `[x] Auth failed  retry ${rnd(9)+1}/9`],
+    ["", () => `[*] Bypass sequence ${hex(6)}`],
+    ["", () => `[*] Decrypting block #${rnd(9999)} :: ${hex(12)}`],
+    ["warn", () => `[!] Trace detected — rerouting via ${ip()}`],
+    ["", () => `[*] Proxy chain ${rnd(9)+2} hops established`],
+    ["ok", () => `[+] Key fragment recovered : ${hex(10)}`],
+  ];
+
+  function addLine() {
+    const [cls, fn] = lines[rnd(lines.length)];
+    const d = document.createElement("div");
+    d.className = cls; d.textContent = fn();
+    log.appendChild(d);
+    while (log.children.length > 60) log.removeChild(log.firstChild);
+  }
+
+  // マトリックス風の雨
+  const cv = $("rain"), cx = cv.getContext("2d");
+  cv.width = innerWidth; cv.height = innerHeight;
+  const fs = 18, cols = Math.floor(cv.width / fs);
+  const drops = Array(cols).fill(0).map(() => rnd(cv.height / fs));
+  const chars = "アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEF東京";
+
+  let granted = false;
+  function frame(now) {
+    const t = now - t0;
+    const p = Math.min(1, t / (HACK_MS - 500));
+
+    // 雨
+    cx.fillStyle = "rgba(0,0,0,.12)"; cx.fillRect(0, 0, cv.width, cv.height);
+    cx.fillStyle = "#00ff66"; cx.font = fs + "px monospace";
+    drops.forEach((y, i) => {
+      cx.fillText(chars[rnd(chars.length)], i * fs, y * fs);
+      drops[i] = (y * fs > cv.height && Math.random() > .95) ? 0 : y + 1;
+    });
+
+    // ログ
+    for (let i = 0; i < 2; i++) addLine();
+
+    // 進捗
+    const shown = Math.floor(p * 100);
+    fill.style.width = shown + "%";
+    pct.textContent = shown < 100 ? `HACKING... ${shown}%` : "100% COMPLETE";
+
+    // サイドパネル
+    $("ip").textContent = ip();
+    $("port").textContent = rnd(65535);
+    $("hex").textContent = Array.from({length:14}, () => hex(10).match(/../g).join(" ")).join("\n");
+    if (p > .35) { $("fw").textContent = "BYPASSED"; $("fw").style.color = "#ffcc00"; }
+    if (p > .65) { $("enc").textContent = "CRACKED"; $("enc").style.color = "#ff2244"; }
+    $("st").textContent = p < 1 ? "INFILTRATING" : "ROOT ACCESS";
+
+    // ランダムなグリッチ
+    if (Math.random() < .04) { screen.classList.remove("flash"); void screen.offsetWidth; screen.classList.add("flash"); }
+
+    if (t >= HACK_MS - 500 && !granted) {
+      granted = true;
+      screen.classList.remove("flash"); void screen.offsetWidth; screen.classList.add("flash");
+      $("granted").style.display = "flex";
+    }
+    if (t < HACK_MS) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>
