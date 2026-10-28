@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>CLASSIFIED TERMINAL</title>
+<title>OICONT TERMINAL</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -150,8 +150,8 @@
 <div id="screen">
 
   <div id="login">
-    <div class="title">██████ SECURE TERMINAL</div>
-    <div class="sub">■■専用回線 ― 接触コードを入力せよ</div>
+    <div class="title">OICONT SECURE TERMINAL</div>
+    <div class="sub">卒業生専用回線</div>
     <input id="pw" type="text" autocomplete="off" spellcheck="false" autofocus>
     <div id="msg"></div>
     <div class="sub" style="font-size:.9vw;opacity:.35">[ENTER] で認証</div>
@@ -164,7 +164,7 @@
       <div style="font-size:1.3vw;margin-bottom:.8vw">■ OPERATION : 卒業おめでとう</div>
       <div class="row"><span>回線</span><span id="ip">---</span></div>
       <div class="row"><span>接触コード</span><span id="port">32118</span></div>
-      <div class="row"><span>■■の監視</span><span id="fw" style="color:#ff2244">監視中</span></div>
+      <div class="row"><span>卒業生の監視</span><span id="fw" style="color:#ff2244">監視中</span></div>
       <div class="row"><span>写真データ</span><span id="enc" style="color:#ff2244">「う」未取得</span></div>
       <div class="row"><span>任務状況</span><span id="st">CONNECTING</span></div>
       <div id="hex"></div>
@@ -173,7 +173,7 @@
     <div id="bar"><div id="fill"></div><div id="pct">0%</div></div>
     <div id="granted">
       <div class="big">ACCESS GRANTED</div>
-      <div class="small">■■ ― 任務を開始せよ</div>
+      <div class="small">BEPPAN</div>
     </div>
   </div>
 
@@ -388,21 +388,25 @@ function startHack() {
   const ip = () => `${rnd(223)+1}.${rnd(256)}.${rnd(256)}.${rnd(256)}`;
 
   const lines = [
-    ["", () => `> connect --unit ██████ --code 32118 --port ${rnd(60000)+1024}`],
-    ["", () => `[*] ■■データベースに接続 ${ip()} ...`],
+    ["", () => `> connect --line graduates --code 32118 --port ${rnd(60000)+1024}`],
+    ["", () => `[*] 卒業生専用回線に接続 ${ip()} ...`],
     ["", () => `[*] Handshake 0x${hex(4)} ... OK`],
     ["", () => `[*] 卒業生リスト取得 : 4年生 / 6年生 ... OK`],
     ["", () => `[*] 写真データ照合 「卒」「業」「お」「め」「で」「と」 ... OK`],
     ["warn", () => `[!] 残り1枚 「う」 未取得`],
-    ["warn", () => `[!] ■■の追跡を検知 — 経路変更 via ${ip()}`],
+    ["warn", () => `[!] 藤井の視線を検知 — 経路変更 via ${ip()}`],
+    ["warn", () => `[!] 山口が部室に接近中 — 通信を一時遮断`],
     ["err", () => `[x] 卒業生に気づかれるリスク : HIGH`],
-    ["", () => `[*] メニュー隊ネットワークに侵入 ${hex(6)}`],
-    ["", () => `[*] 7号館2階 端末に接続 ... open`],
-    ["", () => `[*] 秋合宿ログ 復号中 #${rnd(9999)} :: ${hex(10)}`],
+    ["err", () => `[x] 大山・赤岡・ドラムの信号ロスト  retry ${rnd(9)+1}/9`],
+    ["", () => `[*] 葛岡の端末から写真データを送信中 ${hex(6)}`],
+    ["", () => `[*] 冨永 認証トークン照合中 ${hex(8)}`],
+    ["", () => `[*] 萩原から暗号通信を受信 #${rnd(9999)} :: ${hex(10)}`],
+    ["", () => `[*] ドラム 7号館2階で待機中 ... open`],
+    ["", () => `[*] 赤岡 メニュー隊ネットワークに侵入 ${hex(6)}`],
+    ["", () => `[*] 大山 秋合宿ログ 復号中 #${rnd(9999)}`],
     ["", () => `[*] 水泳部 部員名簿を照合中 ${hex(8)}`],
-    ["err", () => `[x] 協力者 3名の信号ロスト  retry ${rnd(9)+1}/9`],
     ["", () => `[*] Proxy chain ${rnd(9)+2} hops established`],
-    ["ok", () => `[+] ■■■キー断片を回収 : ${hex(10)}`],
+    ["ok", () => `[+] 承認キー断片を回収 : ${hex(10)}`],
     ["ok", () => `[+] 接触コード 32118 認証 ... OK`],
   ];
 
@@ -420,14 +424,14 @@ function startHack() {
   cv.width = innerWidth; cv.height = innerHeight;
   const fs = 18, cols = Math.floor(cv.width / fs);
   const drops = Array(cols).fill(0).map(() => rnd(cv.height / fs));
-  const chars = "アイウエオカキクケコサシスセソ0123456789ABCDEF■■卒業おめでとう任務";
+  const chars = "アイウエオカキクケコサシスセソ0123456789ABCDEF卒業おめでとう任務";
 
   // 段階（開始位置, 表示, 色, 緊迫感）
   const stages = [
-    [0.00, "■■回線に接続中",     "#00ff66", false],
-    [0.20, "■■の監視を回避中",   "#ffcc00", true ],
+    [0.00, "卒業生専用回線に接続中", "#00ff66", false],
+    [0.20, "藤井・山口の監視を回避中", "#ffcc00", true ],
     [0.45, "写真データを復号中",   "#00ff66", false],
-    [0.70, "■■■の承認を待機中", "#ff2244", true ],
+    [0.70, "冨永・葛岡の承認を待機中", "#ff2244", true ],
     [0.90, "任務データ転送中",     "#00ccff", false],
   ];
   let lastStage = -1;
@@ -480,9 +484,9 @@ function startHack() {
     // サイドパネル
     $("ip").textContent = ip();
         $("hex").textContent = Array.from({length:14}, () => hex(10).match(/../g).join(" ")).join("\n");
-    if (p >= .45 && !done.fw)  { done.fw = 1;  setVal("fw",  "回避成功",          "#00ff66", "[+] ▶ ■■の監視を回避しました"); }
+    if (p >= .45 && !done.fw)  { done.fw = 1;  setVal("fw",  "回避成功",          "#00ff66", "[+] ▶ 藤井・山口の監視を回避しました"); }
     if (p >= .70 && !done.enc) { done.enc = 1; setVal("enc", "「う」以外 取得済", "#ffcc00", "[+] ▶ 写真データの復号に成功しました"); }
-    if (p >= 1  && !done.st)   { done.st = 1;  setVal("st",  "任務開始",          "#00ff66", "[+] ▶ ■■■の承認を確認しました"); }
+    if (p >= 1  && !done.st)   { done.st = 1;  setVal("st",  "任務開始",          "#00ff66", "[+] ▶ 冨永・葛岡の承認を確認しました"); }
     if (!done.st) $("st").textContent = "潜入中";
 
     // ランダムなグリッチ
