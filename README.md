@@ -2,6 +2,8 @@
 
 ハッキング風の演出プログラム（ブラウザで動くジョーク演出です。実際のハッキングは一切行いません）。
 
+▶ 遊ぶ: https://redhillken.github.io/oicon2026/
+
 ## 遊び方
 
 1. `index.html` をブラウザで開く（GitHub Pages を有効にしている場合はそのURLを開く）
