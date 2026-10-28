@@ -155,13 +155,17 @@ const HACK_MS = 4000;   // ハッキング演出の長さ（ミリ秒）
 const $ = id => document.getElementById(id);
 const screen = $("screen"), pw = $("pw"), msg = $("msg");
 
-// どこをクリックしても入力欄に戻る＋全画面化
-document.addEventListener("click", () => {
-  pw.focus();
-  if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-    document.documentElement.requestFullscreen().catch(() => {});
-  }
-});
+// 最初のクリック or キー入力の瞬間に全画面化（ブラウザの仕様上、開いた瞬間には不可）
+function goFull() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) return;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (req) { const r = req.call(el, { navigationUI: "hide" }); if (r && r.catch) r.catch(() => {}); }
+}
+["pointerdown", "keydown", "touchstart"].forEach(ev =>
+  document.addEventListener(ev, e => { if (e.key !== "Escape") goFull(); }, true)
+);
+document.addEventListener("click", () => pw.focus());
 window.addEventListener("load", () => pw.focus());
 
 // 全角英字・大文字・空白を吸収して判定
