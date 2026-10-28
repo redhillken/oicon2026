@@ -209,7 +209,7 @@
     <input id="pw" type="text" autocomplete="off" spellcheck="false" autofocus>
     <div id="msg"></div>
     <div class="sub" style="font-size:.9cqw;opacity:.35">[ENTER] で認証</div>
-    <div style="position:absolute;right:1.5cqw;bottom:1.5cqh;font-size:.8cqw;opacity:.3">ver 10/28-20:30 16:9</div>
+    <div style="position:absolute;right:1.5cqw;bottom:1.5cqh;font-size:.8cqw;opacity:.3">ver 10/28-20:35 16:9</div>
   </div>
 
   <div id="hack">
@@ -670,8 +670,8 @@ function startHack() {
       screen.classList.remove("flash"); void screen.offsetWidth; screen.classList.add("flash");
       $("granted").style.display = "flex";
       $("phase").classList.remove("show"); $("alarm").classList.remove("on"); $("auth").style.display = "none";
-      sfx.droneStop(); sirenStop(); hushAll(140);
-      setTimeout(() => { hushed = false; sfx.granted(); }, 150);   // 前の音が消えてから鳴らす
+      sfx.droneStop(); sirenStop(); hushAll(700);                 // 前の音は約0.7秒かけて消えていく
+      setTimeout(() => { hushed = false; sfx.granted(); }, 0);     // 前の音の余韻に少し重ねて鳴らす
       setTimeout(tvEnd, END_HOLD_MS);
     }
     if (t < HACK_MS) requestAnimationFrame(frame);
