@@ -141,6 +141,21 @@
   }
   .hl span:last-child { display: inline-block; animation: pop .8s ease-out; transform-origin: right center; }
   @keyframes pop { 0% { transform: scale(1.8); } 100% { transform: scale(1); } }
+  /* 警報中：画面のふちが赤く脈打つ＋上下に警告帯 */
+  #alarm { position: absolute; inset: 0; pointer-events: none; z-index: 12; display: none; }
+  #alarm.on { display: block; animation: alarmPulse .7s ease-in-out infinite; }
+  @keyframes alarmPulse {
+    0%, 100% { box-shadow: inset 0 0 3vw rgba(255,0,40,.25); background: rgba(255,0,40,0); }
+    50%      { box-shadow: inset 0 0 14vw rgba(255,0,40,.85); background: rgba(255,0,40,.12); }
+  }
+  .warnbar {
+    position: absolute; left: 0; right: 0; height: 5vh; display: flex; align-items: center; justify-content: center;
+    font-size: 2.2vw; font-weight: bold; letter-spacing: .3em; color: #fff; text-shadow: 0 0 10px #ff0022;
+    background: repeating-linear-gradient(-45deg, #ffcc00 0 2vw, #000 2vw 4vw);
+    animation: blink .35s steps(2) infinite;
+  }
+  .warnbar span { background: #c00018; padding: 0 2vw; }
+  .warnbar.top { top: 0; } .warnbar.bottom { bottom: 0; }
   .blink { animation: blink .4s steps(2) infinite; }
   @keyframes blink { 50% { opacity: .2; } }
   @keyframes flash { 0% { filter: brightness(4) invert(1); } 100% { filter: none; } }
@@ -155,7 +170,7 @@
     <input id="pw" type="text" autocomplete="off" spellcheck="false" autofocus>
     <div id="msg"></div>
     <div class="sub" style="font-size:.9vw;opacity:.35">[ENTER] で認証</div>
-    <div style="position:absolute;right:1.5vw;bottom:1.5vh;font-size:.8vw;opacity:.3">ver 10/28-14:45</div>
+    <div style="position:absolute;right:1.5vw;bottom:1.5vh;font-size:.8vw;opacity:.3">ver 10/28-14:55</div>
   </div>
 
   <div id="hack">
@@ -169,6 +184,10 @@
       <div class="row"><span>写真データ</span><span id="enc" style="color:#ff2244">「う」未取得</span></div>
       <div class="row"><span>任務状況</span><span id="st">CONNECTING</span></div>
       <div id="hex"></div>
+    </div>
+    <div id="alarm">
+      <div class="warnbar top"><span>⚠ WARNING ⚠ 監視を検知</span></div>
+      <div class="warnbar bottom"><span>⚠ ALERT ⚠ 直ちに回避せよ</span></div>
     </div>
     <div id="phase"><div class="n" id="phaseN"></div><div class="t" id="phaseT"></div></div>
     <div id="bar"><div id="fill"></div><div id="pct">0%</div></div>
@@ -279,7 +298,28 @@ function klaxon(times = 3, hi = 760, lo = 540, vol = .16) {
     tone(lo, .2, "sawtooth", vol, w + .21, 0, { dist: true, lp: 2400, wet: .3 });
   }
 }
-let drone = null, bedA = null, riserA = null;
+let drone = null, bedA = null, riserA = null, siren = null;
+// ウゥーウゥー：上下にうねる警報サイレン（止めるまで鳴り続ける）
+function sirenStart() {
+  const a = audio(); if (!a || siren) return;
+  const t = a.currentTime, g = a.createGain(), f = a.createBiquadFilter();
+  f.type = "lowpass"; f.frequency.value = 3000;
+  g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.13, t + .15);
+  const lfo = a.createOscillator(), depth = a.createGain();
+  lfo.type = "triangle"; lfo.frequency.value = 1.6; depth.gain.value = 380; lfo.connect(depth);
+  const oscs = [880, 886].map(fr => {
+    const o = a.createOscillator(); o.type = "sawtooth"; o.frequency.value = fr;
+    depth.connect(o.frequency); o.connect(f); o.start(t); return o;
+  });
+  f.connect(g); g.connect(dist); const s = a.createGain(); s.gain.value = .25; g.connect(s).connect(verb);
+  lfo.start(t); siren = { g, oscs, lfo };
+}
+function sirenStop() {
+  if (!siren) return; const a = audio(), t = a.currentTime;
+  siren.g.gain.cancelScheduledValues(t); siren.g.gain.setValueAtTime(siren.g.gain.value || .1, t);
+  siren.g.gain.exponentialRampToValueAtTime(.0001, t + .25);
+  [...siren.oscs, siren.lfo].forEach(o => o.stop(t + .3)); siren = null;
+}
 const sfx = {
   key:    () => { noise(.045, .22, 0, 2200); tone(150, .07, "sine", .3, 0, 60); },
   ok:     () => { play("boot", 1); tone(880, .12, "square", .08, 0, 0, { wet: .5 }); },
@@ -287,12 +327,14 @@ const sfx = {
   tvoff:  () => { play("zap", .9); boom(.6, 220, 25, 1.1); },
   tvon:   () => { play("trans", 1); boom(.8, 90, 28, 1.8); metal(.05); },
   blip:   () => tone(1200 + Math.random() * 1600, .018, "square", .02),
+  // ピピピッ：侵入警報のビープ
+  beeps:  () => { for (let i = 0; i < 3; i++) tone(1480, .07, "square", .12, i * .1, 0, { wet: .2 }); },
   err:    () => play("err", .7, true),
   glitch: () => { noise(.07, .14); },
   // 段階切り替え：衝撃音＋警報（緊迫フェーズは長めのサイレン）
   phase:  (i, urgent) => {
     boom(.65, 120, 32, 1.3); metal(.05);
-    if (urgent) klaxon(3); else klaxon(1, 1046, 784, .1);
+    if (urgent) { klaxon(2); sirenStart(); } else { sirenStop(); klaxon(1, 1046, 784, .1); }
     if (i === 2) play("alien", .45);               // 写真データ復号中：データ通信音
   },
   change: () => { metal(.08); tone(1568, .25, "triangle", .12, 0, 0, { wet: .6 }); },
@@ -322,7 +364,7 @@ const sfx = {
     [drone.o1, drone.o2, drone.lfo].forEach(o => o.stop(t + .2)); drone = null;
   },
   granted: () => {
-    fadeOut(bedA, 300); fadeOut(riserA, 250);
+    sirenStop(); fadeOut(bedA, 300); fadeOut(riserA, 250);
     boom(1, 170, 24, 3); noise(1.2, .35, 0, 3000, .8); metal(.1);
     [55, 82.4, 110].forEach(f => tone(f, 2.6, "sawtooth", .1, .02, 0, { dist: true, lp: 900, wet: .5 }));
     [523, 659, 784].forEach((f, i) => tone(f, 2.2, "sine", .05, .1 + i * .05, 0, { wet: .8 }));
@@ -473,7 +515,11 @@ function startHack() {
     // 段階が変わった瞬間にバナー＋警告音
     let si = 0; stages.forEach((s, i) => { if (p >= s[0]) si = i; });
     const stage = stages[si][1];
-    if (si !== lastStage && !granted) { lastStage = si; showPhase(si); sfx.phase(si, stages[si][3]); }
+    if (si !== lastStage && !granted) {
+      lastStage = si; showPhase(si); sfx.phase(si, stages[si][3]);
+      $("alarm").classList.toggle("on", stages[si][3]);           // 緊迫フェーズは警報表示
+    }
+    if (stages[si][3] && !granted && now - (window._bp || 0) > 650) { window._bp = now; sfx.beeps(); }
     const eased = p < .6 ? p * 1.1 : p < .8 ? .66 + (p - .6) * .3 : .72 + (p - .8) * 1.4; // 66〜78%あたりで粘る
     const shown = p >= 1 ? 100 : Math.min(99, Math.floor(eased * 100 + 1e-6));
     fill.style.width = shown + "%";
@@ -497,7 +543,7 @@ function startHack() {
       granted = true;
       screen.classList.remove("flash"); void screen.offsetWidth; screen.classList.add("flash");
       $("granted").style.display = "flex";
-      $("phase").classList.remove("show");
+      $("phase").classList.remove("show"); $("alarm").classList.remove("on");
       sfx.droneStop(); sfx.granted();
     }
     if (t < HACK_MS) requestAnimationFrame(frame);
