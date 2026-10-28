@@ -245,6 +245,7 @@
 <script>
 const PASSWORD = "oicont";
 const HACK_MS = 16000;   // ハッキング演出の長さ（ミリ秒）
+const END_HOLD_MS = 3500; // ACCESS GRANTED を見せてから、テレビのように閉じて暗転するまで（ミリ秒）
 
 const SOUND = true;     // 効果音を消したいときは false
 
@@ -481,6 +482,20 @@ function tvOff() {
   }, 1150);
 }
 
+// 最後：テレビが消えるように閉じて、そのまま暗転
+function tvEnd() {
+  screen.classList.remove("flash", "tvon");
+  void screen.offsetWidth;
+  screen.classList.add("tvoff"); sfx.tvoff();
+  setTimeout(() => $("dot").classList.add("on"), 550);
+  setTimeout(() => {
+    screen.style.display = "none";
+    document.documentElement.style.background = "#000";
+    document.body.style.background = "#000";
+    document.body.style.cursor = "none";
+  }, 750);
+}
+
 // ===== ハッキング演出 =====
 function startHack() {
   const t0 = performance.now();
@@ -632,6 +647,7 @@ function startHack() {
       $("granted").style.display = "flex";
       $("phase").classList.remove("show"); $("alarm").classList.remove("on"); $("auth").style.display = "none";
       sfx.droneStop(); sfx.granted();
+      setTimeout(tvEnd, END_HOLD_MS);
     }
     if (t < HACK_MS) requestAnimationFrame(frame);
   }
