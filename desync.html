@@ -215,7 +215,7 @@
     <input id="pw" type="text" autocomplete="off" spellcheck="false" autofocus>
     <div id="msg"></div>
     <div class="sub" style="font-size:.9cqw;opacity:.35">[ENTER] で認証</div>
-    <div style="position:absolute;right:1.5cqw;bottom:1.5cqh;font-size:.8cqw;opacity:.3">ver 10/28-22:20 16:9 AV</div>
+    <div style="position:absolute;right:1.5cqw;bottom:1.5cqh;font-size:.8cqw;opacity:.3">ver 10/28-22:30 16:9 AV</div>
   </div>
 
   <div id="hack">
@@ -296,7 +296,9 @@ function audio() {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     ac = new AC();
+    gate = ac.createGain(); gate.connect(ac.destination);   // 【音ずれ版】ぶつ切り用の関門
     makeBus();
+    chopLoop();
   }
   if (ac.state === "suspended") ac.resume();
   return ac;
@@ -306,7 +308,7 @@ function makeBus() {
     // 全体を押し出すコンプ
     const comp = ac.createDynamicsCompressor();
     comp.threshold.value = -16; comp.ratio.value = 6; comp.attack.value = .003; comp.release.value = .25;
-    master = ac.createGain(); master.gain.value = 1; master.connect(comp).connect(ac.destination);
+    master = ac.createGain(); master.gain.value = 1; master.connect(comp).connect(gate);
     // 残響（重厚感）
     const len = ac.sampleRate * 3, ir = ac.createBuffer(2, len, ac.sampleRate);
     for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5); }
@@ -466,6 +468,27 @@ const sfx = {
 
 // ===== 【音ずれ版】すべての効果音を映像より少し遅らせて鳴らす =====
 const AV_DELAY_MS = 1000;
+// 【音ずれ版】音をところどころぶつ切りにする（無音・細かい途切れ）。合成音は関門で、音源ファイルは消音で切る
+let gate = null;
+function chopClips(ms) {
+  const els = [...Object.values(clips), ...clones].filter(a => !a.paused);
+  els.forEach(a => a.muted = true);
+  setTimeout(() => els.forEach(a => a.muted = false), ms);
+}
+function chopLoop() {
+  const t = ac.currentTime, r = Math.random();
+  if (r < .55) {                                  // ブツッと無音
+    const d = .05 + Math.random() * .17;
+    gate.gain.setValueAtTime(0, t); gate.gain.setValueAtTime(1, t + d); chopClips(d * 1000);
+  } else {                                        // ダダダッと細かく途切れる
+    const n = 3 + Math.floor(Math.random() * 4), step = .035 + Math.random() * .03;
+    for (let i = 0; i < n; i++) {
+      gate.gain.setValueAtTime(0, t + i * step * 2); gate.gain.setValueAtTime(1, t + i * step * 2 + step);
+      setTimeout(() => chopClips(step * 1000), i * step * 2000);
+    }
+  }
+  setTimeout(chopLoop, 250 + Math.random() * 850);
+}
 const sfxRaw = { ...sfx };
 for (const k in sfx) sfx[k] = (...a) => setTimeout(() => sfxRaw[k](...a), AV_DELAY_MS);
 
